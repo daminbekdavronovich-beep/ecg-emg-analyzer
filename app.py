@@ -1,56 +1,72 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+from scipy.signal import find_peaks
 
-st.set_page_config(page_title="ECG & EMG Analyzer", layout="wide")
+st.set_page_config(page_title="ECG Age Analysis", layout="wide")
 
-st.title("🫀 ECG & 💪 EMG Signal Analyzer")
+st.title("🫀 ECG Age-Based Heart Analysis")
 
-st.markdown("TXT yoki CSV fayl yuklang va signalni analiz qiling.")
+st.markdown("ECG signal yuklang va yoshga mos yurak tahlilini oling.")
+
+# ==== AGE NORMAL RANGES ====
+def age_normal_range(age):
+    if age <= 1:
+        return (100, 160)
+    elif age <= 10:
+        return (70, 120)
+    elif age <= 18:
+        return (60, 100)
+    elif age <= 60:
+        return (60, 100)
+    else:
+        return (60, 90)
 
 # ==== FILE UPLOAD ====
-uploaded_file = st.file_uploader("Fayl yuklang", type=["txt", "csv"])
+uploaded_file = st.file_uploader("ECG TXT yoki CSV yuklang", type=["txt", "csv"])
 
 if uploaded_file is not None:
     try:
+        age = st.number_input("Yoshingizni kiriting", min_value=1, max_value=120, value=25)
+
         data = np.loadtxt(uploaded_file)
         df = pd.DataFrame(data)
 
-        st.success("Fayl muvaffaqiyatli yuklandi ✅")
+        column_index = st.number_input(
+            "Qaysi ustunni olish kerak?",
+            min_value=0,
+            max_value=df.shape[1] - 1,
+            value=0,
+            step=1
+        )
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            signal_type = st.selectbox("Signal turini tanlang", ["ECG", "EMG"])
-
-        with col2:
-            column_index = st.number_input(
-                "Qaysi ustunni olish kerak?",
-                min_value=0,
-                max_value=df.shape[1] - 1,
-                value=0,
-                step=1
-            )
-
-        signal = df.iloc[:, column_index]
+        signal = df.iloc[:, column_index].values
         signal = signal - np.mean(signal)
 
-        # Tezlashtirish
-        if len(signal) > 5000:
-            step = len(signal) // 5000
-            signal = signal[::step]
+        # ==== R-PEAK DETECTION ====
+        peaks, _ = find_peaks(signal, distance=50, height=np.std(signal))
 
-        st.subheader(f"{signal_type} Signal Grafigi")
+        duration_seconds = len(signal) / 1000  # sampling rate 1000 Hz deb olamiz
+        bpm = (len(peaks) / duration_seconds) * 60
 
-        st.line_chart(signal, use_container_width=True)
+        st.subheader("📈 ECG Signal")
+        st.line_chart(signal)
 
-        st.subheader("📊 Statistika")
+        st.subheader("❤️ Yurak urish tezligi (BPM)")
+        st.metric("BPM", round(bpm, 1))
 
-        col3, col4, col5 = st.columns(3)
+        normal_min, normal_max = age_normal_range(age)
 
-        col3.metric("O'rtacha", round(float(np.mean(signal)), 2))
-        col4.metric("Maks", round(float(np.max(signal)), 2))
-        col5.metric("Min", round(float(np.min(signal)), 2))
+        st.subheader("📊 Yoshga mos norma")
+
+        st.write(f"Norma: {normal_min} - {normal_max} BPM")
+
+        if bpm < normal_min:
+            st.error("⚠️ Yurak urishi past (Bradycardia ehtimoli)")
+        elif bpm > normal_max:
+            st.error("⚠️ Yurak urishi yuqori (Tachycardia ehtimoli)")
+        else:
+            st.success("✅ Yurak urishi yoshga mos normal diapazonda")
 
     except Exception as e:
         st.error(f"Xato yuz berdi: {e}")
