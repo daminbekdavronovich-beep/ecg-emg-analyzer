@@ -1,6 +1,4 @@
 streamlit
 numpy
-matplotlib
-scipy
 pandas
-reportlab
+scipy
